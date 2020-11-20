@@ -1,7 +1,28 @@
+
+#include <Adafruit_NeoPixel.h>
+
+//pin led data lead is connected to
+#define LED_PIN    13
+
+// How many NeoPixels are attached to the Arduino?
+#define LED_COUNT 64
+
+Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
+
 int temp[8];//temp row array
 
 int board[8][8]; //virtual board
+int prvState[8][8];//Previous state of the board
 int analogIN;
+
+char LEDboard[8][8] = {{'x','x','x','x','x','x','x','x'},
+                       {'x','x','x','x','x','x','x','x'},
+                       {'-','-','-','-','-','-','-','-'},
+                       {'-','-','-','-','-','-','-','-'},
+                       {'-','-','-','-','-','-','-','-'},
+                       {'-','-','-','-','-','-','-','-'},
+                       {'o','o','o','o','o','o','o','o'},
+                       {'o','o','o','o','o','o','o','o'}};
 void setup()
 {
   Serial.begin(9600);
@@ -13,16 +34,27 @@ void setup()
   pinMode(2, OUTPUT);
   pinMode(1, OUTPUT);
   pinMode(0, OUTPUT);
+
+  strip.begin();
+  strip.clear();
+  
   
 }
 
 void loop()
 {
   readBoard();//make virtual board
+
+  copyBoard();//make a copy of the board
   
+  printBoard();//print virtual board (for testing only)
+}
+
+void printBoard()
+{
   for(int a = 0; a <8; a++)
   {
-   	for(int b = 0; b < 8; b++)
+     for(int b = 0; b < 8; b++)
     {
      Serial.print(board[a][b]);Serial.print(" ");//print virtual board
      
@@ -31,14 +63,35 @@ void loop()
   }
   Serial.println("------------------------------------------------------");
 }
+
+void copyBoard()
+{
+  for(int a = 0; a <8; a++)
+  {
+     for(int b = 0; b < 8; b++)
+    {
+      prvState[a][b] = board[a][b];
+    }
+  }
+}
+
 void readBoard()
 {
   for(int i = 0; i < 8; i++)
   {
-   
+    if(i != 0)
+    {
+      digitalWrite(i-1,LOW);//turn previous row off
+    }
+    else
+    {
+      digitalWrite(7,LOW);//if checking first row, turn last row off
+    }
+    digitalWrite(i,HIGH);//turn current row on
+    
   analogIN = analogRead(A0)>>2;//converting 10 bit input to 8 bit
   
-  	temp[0] =(analogIN/128);//converting 0-256 value to 8 bit binary
+    temp[0] =(analogIN/128);//converting 0-256 value to 8 bit binary
   analogIN = analogIN % 128;
     temp[1] =(analogIN/64);
   analogIN = analogIN % 64;
@@ -62,5 +115,89 @@ void readBoard()
     
   }
   
-  delay(100); // Wait for 1000 millisecond(s)
+  delay(100); // Wait for 100 millisecond(s)
+}
+
+void updateBoard()
+{
+  int row1 = 0;int column1 = 0;
+  
+  int row2 = 0;int column2 = 0;
+
+  int row3 = 0;int column3 = 0;
+
+  boolean taking = false;
+  
+
+  int count = 0; 
+  
+  for(int i = 0; i < 8; i++)
+  {
+    for(int j = 0; j < 8; j++)
+    {
+      if(count == 2)//swap position of LEDboard
+      {
+          char temp;
+          temp = LEDboard[row1][column1];
+          LEDboard[row3][column3] = temp;
+          LEDboard[row1][column1] = '-';
+
+        count = 0;
+      }
+      if(board[i][j] != prvState[i][j])
+      {
+        if(count == 0)//first piece change
+        {
+          row1 = i;
+          column1 = j;
+          count++;
+        }
+        else if(count == 1 and board[i][j] == 0)//second piece change, normal move
+        {
+          row2 = i;
+          column2 = j;
+
+          count++;
+        }
+        else if(count == 1 and board[i][j] == 1)//second piece change, taking move
+        {
+          row3 = i;
+          column3 = j;
+
+          count++;
+        }
+      }
+    }
+  }
+}
+
+void UpdateLED()
+{
+  char temp;
+  int count = 0;
+  
+    for(int i = 0; i < 8; i++)
+  {
+    for(int j = 0; j < 8; j++)
+    {
+      temp = LEDboard[i][j];
+
+      switch(temp)
+      {
+        case 'x': strip.setPixelColor(count, strip.Color(100,0,0));
+        break;
+
+        case 'o':strip.setPixelColor(count, strip.Color(0,100,0));
+        break;
+
+        case '-':strip.setPixelColor(count, strip.Color(0,0,0));
+        break;
+      }
+
+      count++;
+      
+    }
+  }
+  
+  strip.show();
 }
